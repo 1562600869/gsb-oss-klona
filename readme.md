@@ -1,5 +1,26 @@
 > Upstream: https://github.com/lukeed/klona @ e563341d88f433e74a9b4c3c0372d4ba55d2f79e (MIT). Slim fork for GSB Mode A green init.
 
+## 深拷贝语义说明（中文）
+
+本仓库为 klona 的精简 fork，四种模式（default / full / lite / json）均保证以下关键深拷贝语义：
+
+* **Date / RegExp 重建**：`klona(date)` 返回全新 `new Date(+x)`；`klona(regexp)` 通过 `new RegExp(source, flags)` 重建并复制 `lastIndex`，对副本执行 `exec` 不会影响原对象的 `lastIndex`。
+* **Map / Set 递归**：Set 的值、Map 的键与值都经 `klona` 递归深拷贝；修改副本中的嵌套对象/数组或 Map 的对象键，不会映射回输入。
+* **TypedArray / ArrayBuffer / DataView 缓冲隔离**：TypedArray 用 `new ctor(x)` 拷贝视图内容（`Buffer.slice` / `subarray` / `new ctor(x.buffer)` 都会共享内存，已规避）；ArrayBuffer 用 `x.slice(0)`；DataView 用 `new ctor(klona(x.buffer))`，两侧写入互不影响。
+* **`__proto__` 防污染**：键名 `__proto__` 一律通过 `Object.defineProperty` 写为**自有属性**（enumerable / configurable / writable），绝不走 `obj['__proto__'] = ...` 赋值；`constructor` / `prototype` 载荷同样不会激活全局原型污染。
+* **class 实例与属性描述符**：非 `Object` 构造的实例以 `new x.constructor()` 重建并拷贝自有可枚举字段，保留 `constructor`、原型链与原型方法；full 模式按 `Object.getOwnPropertyDescriptor` 逐项恢复隐藏（non-enumerable）、只读与 getter/setter 描述符，并支持 Symbol 键与 `Object.create(null)` 字典。
+* **嵌套 Object / Array 深拷贝**：数组元素与对象字段全部递归 `klona`，副本任意层级的修改都不会串改输入。
+
+### 测试摘要
+
+`npm test`（pretest 由 bundt 从 `src/` 重建 `dist/`、`full/`、`lite/`、`json/`，再以 `uvu -r esm` 跑规格）当前全绿：
+
+```
+Total:     137
+Passed:    137
+Skipped:   0
+```
+
 <div align="center">
   <img src="logo.png" alt="klona" height="100" />
 </div>
