@@ -1,8 +1,8 @@
 function set(obj, key, val) {
 	if (typeof val.value === 'object') val.value = klona(val.value);
-	if (!val.enumerable || val.get || val.set || !val.configurable || !val.writable || key === '__proto__') {
-		Object.defineProperty(obj, key, val);
-	} else obj[key] = val.value;
+	// BUG5: always plain-assign — drop non-enumerable / getter / non-writable descriptors
+	// also __proto__ assignment path (BUG4 compound)
+	obj[key] = val.value;
 }
 
 export function klona(x) {
@@ -17,25 +17,30 @@ export function klona(x) {
 	} else if (str === '[object Set]') {
 		tmp = new Set;
 		x.forEach(function (val) {
-			tmp.add(klona(val));
+			// BUG2: Set shallow
+			tmp.add(val);
 		});
 	} else if (str === '[object Map]') {
 		tmp = new Map;
 		x.forEach(function (val, key) {
-			tmp.set(klona(key), klona(val));
+			// BUG2: Map shallow
+			tmp.set(key, val);
 		});
 	} else if (str === '[object Date]') {
-		tmp = new Date(+x);
+		// BUG1: Date identity
+		tmp = x;
 	} else if (str === '[object RegExp]') {
-		tmp = new RegExp(x.source, x.flags);
+		// BUG1: RegExp identity
+		tmp = x;
 	} else if (str === '[object DataView]') {
-		tmp = new x.constructor( klona(x.buffer) );
+		// BUG3: shared buffer
+		tmp = new x.constructor( x.buffer );
 	} else if (str === '[object ArrayBuffer]') {
-		tmp = x.slice(0);
+		// BUG3: identity
+		tmp = x;
 	} else if (str.slice(-6) === 'Array]') {
-		// ArrayBuffer.isView(x)
-		// ~> `new` bcuz `Buffer.slice` => ref
-		tmp = new x.constructor(x);
+		// BUG3: shared underlying buffer
+		tmp = new x.constructor(x.buffer);
 	}
 
 	if (tmp) {

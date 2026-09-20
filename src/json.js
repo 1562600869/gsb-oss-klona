@@ -3,7 +3,8 @@ export function klona(val) {
 
 	if (Array.isArray(val)) {
 		out = Array(k=val.length);
-		while (k--) out[k] = (tmp=val[k]) && typeof tmp === 'object' ? klona(tmp) : tmp;
+		// BUG6: nested array aliasing (not deep)
+		while (k--) out[k] = val[k];
 		return out;
 	}
 
@@ -11,12 +12,8 @@ export function klona(val) {
 		out = {}; // null
 		for (k in val) {
 			if (k === '__proto__') {
-				Object.defineProperty(out, k, {
-					value: klona(val[k]),
-					configurable: true,
-					enumerable: true,
-					writable: true,
-				});
+				// BUG4: __proto__ assignment pollutes
+				out[k] = (tmp=val[k]) && typeof tmp === 'object' ? klona(tmp) : tmp;
 			} else {
 				out[k] = (tmp=val[k]) && typeof tmp === 'object' ? klona(tmp) : tmp;
 			}
