@@ -126,6 +126,39 @@ console.log(
 ```
 
 
+## 深拷贝语义说明（中文）
+
+本精简版 `klona` 提供四种模式，均导出同名 `export function klona`，构建由 `bundt` 完成（`src/*.js` → `dist/`、`full/`、`lite/`、`json/`）：
+
+* `klona/json`（`src/json.js`）：仅处理普通对象（POJO）与数组，适合 JSON 数据。
+* `klona/lite`（`src/lite.js`）：在 json 基础上增加自定义 class 实例、`Date` 与 `RegExp`。
+* `klona`（`src/index.js`，默认）：在 lite 基础上增加 `Map`、`Set`、`DataView`、`ArrayBuffer` 与 TypedArray。
+* `klona/full`（`src/full.js`）：在默认基础上保留 Symbol 键，并按属性描述符（含不可枚举属性与 getter/setter）恢复。
+
+关键深拷贝语义：
+
+* **基本类型与 null**：`typeof x !== 'object'` 时原样返回；`null` 安全返回 `null`，不会抛错。
+* **Date 重建**：`klona(date)` 返回 `new date.constructor(+date)`，是全新实例；对副本调用 `setDate(...)`（甚至令其变为 `Invalid Date`）不会影响原对象。
+* **RegExp 重建**：以 `new RegExp(source, flags)` 复制，并同步 `lastIndex`；对副本执行 `exec` 推进 `lastIndex` 不会改写原正则。
+* **Map / Set 递归**：`Set` 的每个值、`Map` 的每个键与值都会再次经过 `klona` 递归克隆；修改副本中的嵌套对象/数组、甚至改写副本的对象键，都不会回映到输入。
+* **TypedArray / ArrayBuffer / DataView 缓冲隔离**：TypedArray（含 Node `Buffer`）用 `new ctor(x)` 复制视图内容，`ArrayBuffer` 用 `slice(0)` 复制字节，`DataView` 用 `new ctor(klona(x.buffer))` 重建；任一侧写入都不会串改另一侧的底层内存（不使用会共享内存的 `Buffer.slice` / `subarray` / `new ctor(x.buffer)`）。
+* **原型污染防护（`__proto__`）**：遍历到键名 `__proto__` 时，绝不使用 `obj['__proto__'] = ...` 赋值，而是通过 `Object.defineProperty` 将其写成**自有属性**（enumerable/configurable/writable），因此 `JSON.parse('{"__proto__":{"a0":true}}')` 克隆后 `JSON.stringify` 形态保持 `{"__proto__":{"a0":true}}`，同时 `({})['a0']` 仍为 `undefined`；`constructor`/`prototype` 载荷同样不会激活全局污染。
+* **class 实例**：非 `Object` 构造、且 `constructor` 可调用的实例使用 `new x.constructor()` 创建，再拷贝自有可枚举字段，保留 `constructor`/`__proto__` 与原型链上的方法（`instanceof` 仍成立）。
+* **属性描述符（full）**：通过 `Object.getOwnPropertyDescriptor` 读取并以 `Object.defineProperty` 恢复 hidden（不可枚举）、writable/configurable 差异以及 getter/setter；描述符内的对象值同样递归克隆，因此对 getter 返回数组的 `push` 不会污染输入。
+* **嵌套 Object / Array**：对象字段与数组元素一律递归 `klona`，`output[1][2][0] = 'howdy'`、`output.bar.c[0].hello = 99` 等深层写入不会影响输入。
+
+## 测试
+
+`npm test` 会先执行 `pretest`（`bundt` 从 `src/` 重建 `dist/`、`full/`、`lite/`、`json/`），再用 `uvu -r esm` 对四种模式运行同一套规格（Date/RegExp、Map/Set、TypedArray、原型污染、class、描述符、嵌套隔离等）。
+
+最近一次真实运行摘要（Node v18.20.5）：
+
+```
+  Total:     137
+  Passed:    137
+  Skipped:   0
+```
+
 ## API
 
 ### klona(input)

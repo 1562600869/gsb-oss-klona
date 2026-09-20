@@ -1,8 +1,10 @@
 function set(obj, key, val) {
 	if (typeof val.value === 'object') val.value = klona(val.value);
-	// BUG5: always plain-assign — drop non-enumerable / getter / non-writable descriptors
-	// also __proto__ assignment path (BUG4 compound)
-	obj[key] = val.value;
+	if (key === '__proto__' || !val.enumerable || val.get || val.set || !(val.writable && val.configurable)) {
+		Object.defineProperty(obj, key, val);
+	} else {
+		obj[key] = val.value;
+	}
 }
 
 export function klona(x) {
@@ -17,30 +19,24 @@ export function klona(x) {
 	} else if (str === '[object Set]') {
 		tmp = new Set;
 		x.forEach(function (val) {
-			// BUG2: Set shallow
-			tmp.add(val);
+			tmp.add(klona(val));
 		});
 	} else if (str === '[object Map]') {
 		tmp = new Map;
 		x.forEach(function (val, key) {
-			// BUG2: Map shallow
-			tmp.set(key, val);
+			tmp.set(klona(key), klona(val));
 		});
 	} else if (str === '[object Date]') {
-		// BUG1: Date identity
-		tmp = x;
+		tmp = new x.constructor(+x);
 	} else if (str === '[object RegExp]') {
-		// BUG1: RegExp identity
-		tmp = x;
+		tmp = new x.constructor(x.source, x.flags);
+		tmp.lastIndex = x.lastIndex;
 	} else if (str === '[object DataView]') {
-		// BUG3: shared buffer
-		tmp = new x.constructor( x.buffer );
+		tmp = new x.constructor( klona(x.buffer) );
 	} else if (str === '[object ArrayBuffer]') {
-		// BUG3: identity
-		tmp = x;
+		tmp = x.slice(0);
 	} else if (str.slice(-6) === 'Array]') {
-		// BUG3: shared underlying buffer
-		tmp = new x.constructor(x.buffer);
+		tmp = new x.constructor(x);
 	}
 
 	if (tmp) {
@@ -49,7 +45,7 @@ export function klona(x) {
 		}
 
 		for (i=0, list=Object.getOwnPropertyNames(x); i < list.length; i++) {
-			if (Object.hasOwnProperty.call(tmp, k=list[i]) && tmp[k] === x[k]) continue;
+			if (k !== '__proto__' && Object.hasOwnProperty.call(tmp, k=list[i]) && tmp[k] === x[k]) continue;
 			set(tmp, k, Object.getOwnPropertyDescriptor(x, k));
 		}
 	}
