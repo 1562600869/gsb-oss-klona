@@ -1,0 +1,11 @@
+
+*-lock.*
+*.lock
+*.log
+.DS_Store
+/dist
+/full
+/json
+/lite
+node_modules
+node_modules/
